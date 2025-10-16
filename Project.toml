@@ -1,0 +1,4 @@
+name = "FoodWebTools"
+uuid = "1f540cc9-11db-4f16-ba1b-35cbaf81ff1e"
+authors = ["Tanya Strydom <tanya.strydom@icloud.com>"]
+version = "0.1.0"
