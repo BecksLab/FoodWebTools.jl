@@ -1,6 +1,3 @@
-using DataFrames
-using SpeciesInteractionNetworks
-
 """
   lmatrix(
     spp_list::Vector{Any},
