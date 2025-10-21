@@ -173,7 +173,7 @@ adbmmodel(spp_list::DataFrame, parameters::Dict{Symbol,Any}, biomass::Vector{Flo
   Academy of Sciences 105 (11): 4191–96. https://doi.org/10.1073/pnas.0710672105.
 
 """
-function adbmmodel(spp_list::Vector{Symbol}, parameters::Dict{Symbol,Any}, biomass::Vector{Float64})
+function adbmmodel(spp_list::Vector{Any}, parameters::Dict{Symbol,Any}, biomass::Vector{Float64})
 
     S = length(spp_list)
 
