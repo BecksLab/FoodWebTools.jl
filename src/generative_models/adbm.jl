@@ -156,7 +156,7 @@ end
 
 
 """
-adbmmodel(spp_list::DataFrame, parameters::Dict{Symbol,Any}, biomass::Vector{Float64})
+adbmmodel(spp_list::Vector{Any}, parameters::Dict{Symbol,Any}, biomass::Vector{Float64})
 
   This function returns the food web based on the ADBM model of Petchey et al. 2008.
   The function takes the paramteres created by adbm_parameters and uses 
