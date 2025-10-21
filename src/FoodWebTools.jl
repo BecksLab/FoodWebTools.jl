@@ -4,8 +4,12 @@ module FoodWebTools
 
 # export functions
 
-#adbm
+# adbm
 include(joinpath("lib", "generative_models", "adbm.jl"))
 export adbm
+
+# l matrix
+include(joinpath("lib", "generative_models", "lmatrix.jl"))
+export lmatrix
 
 end # module FoodWebTools
