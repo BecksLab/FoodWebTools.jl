@@ -1,20 +1,22 @@
 """
-ltm_model.jl
+ltm.jl
 -----------------
 Generates a food web using the Latent Trait Model (LTM).
 
-This file contains:
-1.  `is_viable`: The viability checker function.
-2.  `LTM`: The main LTM generation function you provided.
-3.  `generate_ltm_model`: A standardised wrapper function called by `main.jl`.
-    This wrapper now also filters the result based on the emergent
-    basal species percentage.
+Contains the core `ltm` generation function (provided by user) and a
+standardised wrapper function `generate_ltm_model` called by `main.jl`.
+
+This version runs the LTM deterministically and without internal viability checks,
+as requested. External checks for basal percentage and connectance are applied
+in the wrapper.
 """
 
 # --- 1. Dependencies (loaded by main.jl) ---
+# Load necessary packages for the LTM calculations.
 using Distributions, Graphs, Random, Statistics
 
 """
+# --- 2. LTM Generator (User Provided Code) ---
     ltm(...) -> NamedTuple
 
 Generates a food web interaction matrix using a Latent Trait Model (LTM). This
@@ -97,168 +99,138 @@ This flexible version can EITHER:
 function ltm(
     species_indices::AbstractVector{Int},
     bodymasses::AbstractVector{Float64},
-    metabolic_classes::AbstractVector{Symbol};
+    metabolic_classes::AbstractVector{Symbol}; # Expects :producer or :invertebrate
     # LTM Parameters
     P_max_target::Float64 = 0.85,
-    x_opt::Float64 = 100.0,
+    x_opt::Float64 = 100.0, # Optimal predator-prey mass ratio (Ropt/Z)
     sigma_x::Float64 = 1.5,
     δ::Float64 = 8.0,
-    # --- MODIFICATION 1: Trait parameters ---
-    # These are now optional and will be used for internal generation
+    # Trait Generation
     trait_sd::Float64 = 1.0,
     trait_correlation::Float64 = 0.0,
-    # Allow for traits to be passed in
     vulnerability_traits::Union{AbstractVector{Float64}, Nothing} = nothing,
     foraging_traits::Union{AbstractVector{Float64}, Nothing} = nothing,
-    # Generation & Viability Control
-    stochastic::Bool = true,
-    ensure_viability::Bool = false,
+    # Generation Settings (Updated Defaults)
+    stochastic::Bool = false,        # Deterministic mode
+    ensure_viability::Bool = false,  # Skip internal viability check
     remove_flawed::Bool = false
 )
-    # Get the number of species (S) from the input indices.
+    # --- Initialization ---
     S = length(species_indices)
-    
-    # Define trait variables in the local scope so they can be assigned
-    # by the conditional logic block below and then used later.
-    local f_traits, v_traits
+    local f_traits, v_traits # Define in local scope for conditional assignment
 
-    # --- BLOCK 1: Generate OR Use Provided Latent Traits ---
-    # This block is the core fix. It checks if traits were passed in.
-    # If not, it generates them. If they were, it uses them.
-    # --- MODIFICATION 2: Add conditional logic ---
+    # --- BLOCK 1: Generate or Use Provided Latent Traits ---
+    # Check if traits need to be generated internally.
     if isnothing(vulnerability_traits) || isnothing(foraging_traits)
-        # CASE A: Traits were NOT provided. Generate them internally.
-        # This branch is used by `setup_recipient_community`.
-        # @info "LTM_matrix: No traits provided, generating internally..."
-
-        # 1a. Define the mean vector (μ) for the two traits, centred at 0.0.
+        # --- Internal Trait Generation ---
+        # Define mean vector (centered at 0).
         μ = [0.0, 0.0]
-
-        # 1b. Construct the covariance matrix (Σ).
-        # Diagonal elements are the variance (σ²).
-        # Off-diagonal elements are the covariance (ρ * σ_v * σ_f),
-        # which in our case is ρ * σ² since both trait SDs are the same.
+        # Define covariance matrix based on SD and correlation.
         Σ = [trait_sd^2               trait_correlation*trait_sd^2;
              trait_correlation*trait_sd^2 trait_sd^2]
-
-        # 1c. Create the multivariate normal distribution object.
+        # Create multivariate normal distribution.
         dist = MvNormal(μ, Σ)
-
-        # 1d. Sample all traits at once. This returns a 2xS matrix.
+        # Sample traits (2xS matrix).
         traits_matrix = rand(dist, S)
-        f_traits = traits_matrix[1, :] # Foraging traits (row 1)
-        v_traits = traits_matrix[2, :] # Vulnerability traits (row 2)
+        f_traits = traits_matrix[1, :] # Row 1: Foraging
+        v_traits = traits_matrix[2, :] # Row 2: Vulnerability
         
-        # 1e. Enforce the ecological rule that producers do not forage.
+        # --- Apply Producer Rule ---
+        # Find indices of producers.
         producer_indices = findall(mc -> mc == :producer, metabolic_classes)
+        # Set foraging trait of producers to 0.
         f_traits[producer_indices] .= 0.0
     else
-        # CASE B: Traits WERE provided. Use them directly.
-        # This branch is used by `create_invaded_community`.
+        # --- Use Provided Traits ---
         v_traits = vulnerability_traits
         f_traits = foraging_traits
-        # We assume the calling function (e.g., create_invaded_community)
-        # has already correctly set producer foraging traits to 0.0.
-    end
-    # --- End of MODIFICATION 2 ---
-    
-    # --- BLOCK 2: Derive ltm Coefficients from Ecologically Intuitive Parameters ---
-    # This block translates user-friendly inputs (like x_opt, sigma_x) into the
-    # mathematical coefficients (α, β, γ) required for the model's
-    # quadratic equation: log-odds = α + βX + γX² (where X is log10(mass_ratio)).
+        # Assume caller has correctly handled producer foraging traits.
+    end # end trait generation block
+
+    # --- BLOCK 2: Derive LTM Coefficients ---
+    # Convert ecologically intuitive parameters into quadratic equation coefficients.
     log_x_opt = log10(x_opt)
     _gamma = -1.0 / (2.0 * sigma_x^2)
     _beta = -2.0 * _gamma * log_x_opt
+    # Use logit transform for the target max probability.
     logit_P_max_target = log(P_max_target / (1.0 - P_max_target))
     _alpha = logit_P_max_target - (_beta * log_x_opt) - (_gamma * log_x_opt^2)
 
-    # --- BLOCK 3: Main Generation Loop ---
-    # This loop will run multiple times *only if* `ensure_viability` and
-    # `remove_flawed` are both true, and the first attempt fails.
-    max_attempts_internal = 100
-    for attempt in 1:max_attempts_internal
-        # --- 3a. Calculate Interaction Probabilities ---
-        # Initialise the matrix to store probabilities (0.0 to 1.0).
-        prob_matrix = zeros(Float64, S, S)
-        
-        # Iterate over every possible predator-prey pair.
-        for pred_idx in species_indices
-            # Producers cannot be predators, so skip them.
-            if metabolic_classes[pred_idx] == :producer || bodymasses[pred_idx] <= 0; continue; end
-            for prey_idx in species_indices
-                # Prevent self-predation (cannibalism).
-                if pred_idx == prey_idx || bodymasses[prey_idx] <= 0; continue; end
-                
-                # Calculate the log10 of the mass ratio (prey mass / predator mass).
-                log_mass_ratio = log10(bodymasses[prey_idx] / bodymasses[pred_idx])
-                if !isfinite(log_mass_ratio); continue; end # Safety check
-                
-                # Calculate the two components of the log-odds.
-                # 1. The body-size component (from the quadratic formula).
-                body_size_log_odds = _alpha + (_beta * log_mass_ratio) + (_gamma * log_mass_ratio^2)
-                # 2. The latent-trait component (from trait matching).
-                latent_trait_log_odds = δ * v_traits[prey_idx] * f_traits[pred_idx]
-                
-                # Combine them to get the total log-odds of an interaction.
-                total_log_odds = body_size_log_odds + latent_trait_log_odds
-                
-                # Convert from log-odds back to a probability (0-1) using the logistic function.
-                prob_matrix[pred_idx, prey_idx] = 1.0 / (1.0 + exp(-total_log_odds))
-            end
-        end
+    # --- BLOCK 3: Generate Interaction Probabilities ---
+    # Initialize matrix to store link probabilities.
+    prob_matrix = zeros(Float64, S, S)
+    # Iterate through all potential predator-prey pairs.
+    for pred_idx in species_indices
+        # Skip if the potential predator is a producer or has invalid body mass.
+        if metabolic_classes[pred_idx] == :producer || bodymasses[pred_idx] <= 0; continue; end
+        for prey_idx in species_indices
+            # Skip self-loops (cannibalism) or invalid prey body mass.
+            if pred_idx == prey_idx || bodymasses[prey_idx] <= 0; continue; end
+            
+            # Calculate log10 of mass ratio (Prey / Predator).
+            log_mass_ratio = log10(bodymasses[prey_idx] / bodymasses[pred_idx])
+            # Skip if mass ratio calculation resulted in non-finite value (e.g., log(0)).
+            if !isfinite(log_mass_ratio); continue; end
+            
+            # Calculate body-size component of interaction probability (log-odds).
+            body_size_log_odds = _alpha + (_beta * log_mass_ratio) + (_gamma * log_mass_ratio^2)
+            # Calculate latent-trait component (log-odds).
+            latent_trait_log_odds = δ * v_traits[prey_idx] * f_traits[pred_idx]
+            # Combine components.
+            total_log_odds = body_size_log_odds + latent_trait_log_odds
+            
+            # Convert total log-odds back to probability using the logistic function.
+            prob_matrix[pred_idx, prey_idx] = 1.0 / (1.0 + exp(-total_log_odds))
+        end # end prey loop
+    end # end predator loop
 
-        # --- 3b. Build the Binary Adjacency Matrix (0s and 1s) ---
-        binary_matrix = zeros(Int, S, S)
-        if stochastic
-            # STOCHASTIC MODE: Flip a weighted coin for every possible link.
-            # A link (1) is formed if a random number [0,1] is less than the probability.
-            for i in 1:S, j in 1:S; if rand() < prob_matrix[i, j]; binary_matrix[i, j] = 1; end; end
-        else
-            # DETERMINISTIC MODE: Create a web with a fixed number of links.
-            # Calculate the total expected number of links by summing all probabilities.
-            expected_links = round(Int, sum(filter(isfinite, prob_matrix)))
-            if expected_links > 0 && isfinite(expected_links)
-                # Find the indices of the `expected_links` *highest* probability pairs.
-                num_to_take = min(expected_links, length(prob_matrix))
-                top_indices = partialsortperm(vec(prob_matrix), 1:num_to_take, rev=true)
-                # Set only those top-probability positions to 1.
+    # --- BLOCK 4: Build Binary Adjacency Matrix ---
+    # Initialize the binary matrix (0s initially).
+    binary_matrix = zeros(Int, S, S)
+    # Check if stochastic or deterministic mode is selected.
+    if stochastic # (Will be false based on updated defaults)
+        # --- Stochastic Mode ---
+        # For each possible link, compare a random number to the probability.
+        for i in 1:S, j in 1:S
+            if rand() < prob_matrix[i, j]; binary_matrix[i, j] = 1; end
+        end
+    else
+        # --- Deterministic Mode ---
+        # Calculate the expected number of links by summing probabilities.
+        expected_links = round(Int, sum(filter(isfinite, prob_matrix)))
+        # Proceed only if expected links is positive and finite.
+        if expected_links > 0 && isfinite(expected_links)
+            # Determine how many links to actually add (cannot exceed S*S).
+            # Get indices of all finite probabilities in the flattened matrix.
+            finite_indices = findall(isfinite, vec(prob_matrix))
+            num_finite = length(finite_indices)
+            # Ensure we don't try to take more links than available finite probabilities.
+            num_to_take = min(expected_links, num_finite)
+            
+            # Find the indices corresponding to the `num_to_take` highest probabilities.
+            if num_to_take > 0
+                # Get the finite probabilities themselves.
+                finite_probs = vec(prob_matrix)[finite_indices]
+                # Find the permutation that sorts these probabilities in descending order.
+                p = sortperm(finite_probs, rev=true)
+                # Select the indices within the `finite_indices` array corresponding to the top probabilities.
+                top_indices_relative = p[1:num_to_take]
+                # Map these relative indices back to the original flattened matrix indices.
+                top_indices = finite_indices[top_indices_relative]
+                # Set the corresponding positions in the binary matrix to 1.
                 binary_matrix[top_indices] .= 1
-            end
-        end
+            end # end if num_to_take > 0
+        end # end if expected_links > 0
+    end # end deterministic mode
 
-        # --- 3c. Handle Viability Checks based on user flags ---
-        if !ensure_viability
-            # Viability checks are OFF. Return the first web immediately, regardless
-            # of its structure.
-            return (status=:unchecked, binary_matrix=binary_matrix, probability_matrix=prob_matrix, v_traits=v_traits, f_traits=f_traits)
-        else
-            # Viability checks are ON. Create a graph and test it.
-            g = SimpleDiGraph(binary_matrix)
-            if is_viable(g)
-                # SUCCESS: The web is viable. Return it.
-                return (status=:viable, binary_matrix=binary_matrix, probability_matrix=prob_matrix, v_traits=v_traits, f_traits=f_traits)
-            else 
-                # FAILURE: The web is not viable.
-                if !remove_flawed
-                    # We are told NOT to remove flawed webs. Return this
-                    # flawed web immediately for analysis.
-                    return (status=:structurally_flawed, binary_matrix=binary_matrix, probability_matrix=prob_matrix, v_traits=v_traits, f_traits=f_traits)
-                end
-                # If we ARE supposed to remove flawed webs (`remove_flawed = true`),
-                # this `else` block finishes, and the `for` loop continues to the
-                # next attempt to try and generate a new one.
-            end
-        end
-    end # End of attempt loop
+    # --- BLOCK 5: Return Result ---
+    # Since ensure_viability is now false by default, we skip internal checks.
+    # The status is always :unchecked in this configuration.
+    return (status=:unchecked, binary_matrix=binary_matrix, probability_matrix=prob_matrix, v_traits=v_traits, f_traits=f_traits)
 
-    # --- BLOCK 4: Handle Generation Failure ---
-    # This code is only reached if `ensure_viability` and `remove_flawed`
-    # were both `true`, and the loop completed `max_attempts_internal` times
-    # without finding a single viable web.
-    @warn "ltm_matrix failed to generate a viable food web after $(max_attempts_internal) attempts."
-    return (status=:generation_failed, binary_matrix=zeros(Int,S,S), probability_matrix=zeros(Float64,S,S), v_traits=v_traits, f_traits=f_traits)
-end
+end # End of ltm function
 
+# --- 3. Viability Checker (User Provided Code - Not used by default now) ---
 """
     is_viable(g::SimpleDiGraph) -> Bool
 
@@ -274,58 +246,64 @@ A web is viable if:
 """
 function is_viable(g::SimpleDiGraph)
     S = nv(g)
-    # CHECK 1: The graph cannot be empty.
     if S == 0; return false; end
-
-    # CHECK 2: There must be at least one producer.
-    # A producer is defined by its structure: it has no outgoing links (it eats nothing).
     producers = findall(i -> outdegree(g, i) == 0, 1:S)
     if isempty(producers); return false; end
-
-    # CHECK 3: All producers must be consumed by something.
-    # This prevents producers from being dead-ends in the energy flow.
     for p in producers
         if indegree(g, p) == 0; return false; end
     end
-
-    # CHECK 4: No species can be completely disconnected from the web.
     for i in 1:S
         if degree(g, i) == 0; return false; end
     end
-
-    # If all checks pass, the web is structurally viable.
     return true
-end
+end # end is_viable
 
-# --- 4. Standardised Wrapper Function (UPDATED) ---
+# --- 4. Standardised Wrapper Function ---
 """
     generate_ltm_model(S, bodymasses, metabolic_classes)
 
-Wrapper for the ltm function to be called from `main.jl`.
-It runs the ltm generator with viability checks and then filters
-the output based on the global BASAL_RANGE.
+Wrapper for the `ltm` function called by `main.jl`.
+Runs the LTM deterministically and without internal viability checks.
+Performs external checks for basal percentage and connectance ranges.
+
+# Arguments
+- `S::Int`: Species richness.
+- `bodymasses::Vector{Float64}`: Absolute body masses.
+- `metabolic_classes::Vector{Symbol}`: Vector of `:producer` or `:invertebrate`.
+
+# Returns
+- `NamedTuple`: Contains `adj`, `percent_basal`, `connectance` if all checks pass.
+- `nothing`: If the basal or connectance check fails.
 """
 function generate_ltm_model(S, bodymasses, metabolic_classes)
 
-    # Call the ltm function, ensuring viability.
-    result = ltm(1:S, bodymasses, metabolic_classes,    
-                 ensure_viability=true, remove_flawed=true)
+    # --- Call Core LTM Function ---
+    # Use updated settings: deterministic, no internal viability check.
+    # Explicitly set x_opt (Ropt/Z) to 100.
+    result = ltm(1:S, bodymasses, metabolic_classes,
+                 x_opt = 100.0,
+                 stochastic = false,
+                 ensure_viability = false,
+                 remove_flawed = false)
     
-    # Handle internal generation failure
-    if result.status != :viable
-        # @warn "LTM model failed internal viability check. Skipping."
-        return nothing
-    end
+    # --- Extract Adjacency Matrix ---
+    adj_matrix = result.binary_matrix
 
-    # Calculate emergent % basal species
-    percent_basal = calculate_emergent_producers(result.binary_matrix)
-
-    # New Requirement: Filter by emergent basal range
+    # --- CHECK 1: Emergent Basal % ---
+    percent_basal = calculate_emergent_producers(adj_matrix)
+    # Check if the calculated percentage is outside the allowed range.
     if !is_in_basal_range(percent_basal)
-        # @warn "LTM web failed basal range check ($percent_basal). Skipping."
-        return nothing
+        return nothing # Fail if outside range.
     end
 
-    return (adj=result.binary_matrix, percent_basal=percent_basal)
-end
+    # --- CHECK 2: Emergent Connectance ---
+    connectance = calculate_connectance(adj_matrix)
+    # Check if the calculated connectance is outside the allowed range.
+    if !is_in_connectance_range(connectance)
+        return nothing # Fail if outside range.
+    end
 
+    # --- Return Success ---
+    # If both checks passed, return the results.
+    return (adj=adj_matrix, percent_basal=percent_basal, connectance=connectance)
+end # end generate_ltm_model
