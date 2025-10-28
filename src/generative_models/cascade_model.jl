@@ -41,7 +41,7 @@ basal percentage and connectance ranges.
 * **Connectance:** Emergent property, checked against `CONNECTANCE_RANGE`.
 * **Body Mass:** Not used by this model.
 
-some random text here.
+some random text here to test some more stuff.
 """
 function generate_cascade_model(S::Int, C_target::Float64)
     # --- Initialize Adjacency Matrix ---
