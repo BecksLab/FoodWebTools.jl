@@ -8,7 +8,8 @@
 
 """
 function adbm_parameters(
-    bodymass::Vector{Float64};
+    bodymass::Vector{Float64},
+    is_producer::Vector{Bool};
     e::Float64 = 1.0,
     a_adbm::Float64 = 0.0189,
     ai::Float64 = -0.491,
@@ -54,8 +55,7 @@ function adbm_parameters(
     S = length(bodymass)
     parameters[:costMat] = ones(Float64, (S, S))
 
-    # Identify producers - based on tiering class
-    is_producer = spp_list.tiering .== "primary"
+    # add producers
     parameters[:is_producer] = is_producer
 
     # add bodymass
