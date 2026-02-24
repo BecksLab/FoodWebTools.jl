@@ -26,6 +26,6 @@ export generate_cascade_model
 
 # ltm
 include(joinpath("generative_models", "ltm.jl"))
-export lmatrix
+export ltm
 
 end # module FoodWebTools
