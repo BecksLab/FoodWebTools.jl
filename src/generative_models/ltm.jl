@@ -101,10 +101,10 @@ function ltm(
     bodymasses::AbstractVector{Float64},
     metabolic_classes::AbstractVector{Symbol}; # Expects :producer or :invertebrate
     # LTM Parameters
-    P_max_target::Float64 = 0.85,
+    P_max_target::Float64 = 0.50,
     x_opt::Float64 = 100.0, # Optimal predator-prey mass ratio (Ropt/Z)
     sigma_x::Float64 = 1.5,
-    δ::Float64 = 8.0,
+    δ::Float64 = 3.0,
     # Trait Generation
     trait_sd::Float64 = 1.0,
     trait_correlation::Float64 = 0.0,

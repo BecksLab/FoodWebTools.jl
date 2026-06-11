@@ -47,10 +47,10 @@ function ltm_laura(
     metabolic_classes::AbstractVector{Symbol}; 
     
     # LTM Parameters
-    P_max_target::Float64 = 0.85,
+    P_max_target::Float64 = 0.50,
     x_opt::Float64 = 100.0, 
     sigma_x::Float64 = 1.5,
-    δ::Float64 = 8.0,
+    δ::Float64 = 3.0,
     
     # Physical Constraints
     mass_ratio_envelope::Tuple{Float64, Float64} = (1e-1, 1e4),
