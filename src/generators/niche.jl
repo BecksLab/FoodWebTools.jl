@@ -12,7 +12,7 @@ handled externally by the main script (01_BuildNetworks.jl).
 using Distributions, Random 
 
 """
-    generate_niche_model(S::Int, C_target::Float64)
+    niche_model(S::Int, C_target::Float64)
 
 Generates an adjacency matrix using the standard Niche Model algorithm.
 
@@ -27,7 +27,7 @@ Generates an adjacency matrix using the standard Niche Model algorithm.
 - `Matrix{Int}`: The (S x S) adjacency matrix.
 - `nothing`: If parameter calculation fails (e.g., C_target > 0.5).
 """
-function generate_niche_model(S::Int, C_target::Float64)
+function niche_model(S::Int, C_target::Float64)
     # --- Initialize Adjacency Matrix ---
     adj = zeros(Int, S, S)
     

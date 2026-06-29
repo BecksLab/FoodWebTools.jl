@@ -12,7 +12,7 @@ handled externally by the main script (01_BuildNetworks.jl).
 using Graphs, Random
 
 """
-    generate_random_model(S::Int, C_target::Float64)
+    random_model(S::Int, C_target::Float64)
 
 Generates a random directed graph (Erdős-Rényi (n, L) model) with a fixed
 number of links `L` derived from `C_target`.
@@ -26,7 +26,7 @@ number of links `L` derived from `C_target`.
 # Returns
 - `Matrix{Int}`: The (S x S) adjacency matrix.
 """
-function generate_random_model(S::Int, C_target::Float64)
+function random_model(S::Int, C_target::Float64)
     
     # --- 1. Calculate Target Number of Links (L) ---
     L = round(Int, C_target * S^2)
@@ -39,11 +39,5 @@ function generate_random_model(S::Int, C_target::Float64)
     # --- 3. Get Adjacency Matrix ---
     adj = Matrix(adjacency_matrix(g))
     
-    # --- 4. (DELETED) Filters ---
-    # All filtering is now handled by the external wrapper
-    # in 01_BuildNetworks.jl
-
-    # --- 5. Return Success ---
-    # Return the generated matrix directly.
     return adj
 end # end generate_random_model

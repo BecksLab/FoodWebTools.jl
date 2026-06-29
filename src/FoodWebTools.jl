@@ -1,31 +1,28 @@
 module FoodWebTools
 
-# Dependencies
+using LinearAlgebra
 
-# export functions
+# Generative models
+include(joinpath("generators", "adbm.jl"))
+include(joinpath("generators", "lmatrix.jl"))
+include(joinpath("generators", "niche.jl"))
+include(joinpath("generators", "random.jl"))
+include(joinpath("generators", "cascade.jl"))
+include(joinpath("generators", "ltm.jl"))
 
-# adbm
-include(joinpath("generative_models", "adbm.jl"))
+# Network metrics
+include(joinpath("metrics", "intervality.jl"))
+include(joinpath("metrics", "trophic_level.jl"))
+
+# Public API
 export adbm, adbm_parameters
-
-# l matrix
-include(joinpath("generative_models", "lmatrix.jl"))
 export lmatrix
-
-# niche
-include(joinpath("generative_models", "niche_model.jl"))
-export generate_niche_model
-
-# random
-include(joinpath("generative_models", "random_model.jl"))
-export generate_random_model
-
-# cascade
-include(joinpath("generative_models", "cascade_model.jl"))
-export generate_cascade_model
-
-# ltm
-include(joinpath("generative_models", "ltm.jl"))
+export niche_model
+export random_model
+export cascade_model
 export ltm
 
-end # module FoodWebTools
+export intervality
+export trophic_level
+
+end

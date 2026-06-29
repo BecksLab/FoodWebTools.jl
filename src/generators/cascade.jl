@@ -12,7 +12,7 @@ handled externally by the main script (01_BuildNetworks.jl).
 using Random
 
 """
-    generate_cascade_model(S::Int, C_target::Float64)
+    cascade_model(S::Int, C_target::Float64)
 
 Generates an adjacency matrix using the standard Cascade Model algorithm.
 Links (i -> j) only form if `n[i] > n[j]` (cascade constraint) and occur
@@ -28,7 +28,7 @@ with probability `p` derived from `C_target`.
 - `Matrix{Int}`: The (S x S) adjacency matrix.
 - `nothing`: If probability calculation fails (e.g., p > 1).
 """
-function generate_cascade_model(S::Int, C_target::Float64)
+function cascade_model(S::Int, C_target::Float64)
     # --- Initialize Adjacency Matrix ---
     adj = zeros(Int, S, S)
     
