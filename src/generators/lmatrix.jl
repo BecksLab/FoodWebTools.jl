@@ -33,6 +33,11 @@ Applies external checks for basal percentage and connectance in the wrapper.
 
     Requires a species list, vector of bodymass, and if the species is a
     producer or not.
+
+    #### Matrix Convention
+    - **Rows (i):** Consumers / Predators (who is doing the eating)
+    - **Columns (j):** Resources / Prey (who is being eaten)
+    - `link_matrix[i, j] = 1` indicates that predator `i` consumes prey `j`.
     
     #### References
     

@@ -1,5 +1,6 @@
 """
-trophic_level(N::SpeciesInteractionNetwork)
+trophic_level(A::AbstractMatrix{Bool};
+              species=nothing)
 
     Calculates the trophic level of all species in a network using the average 
     shortest path from the prey of species 𝑖 to a basal species
