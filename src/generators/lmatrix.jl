@@ -16,7 +16,7 @@ Applies external checks for basal percentage and connectance in the wrapper.
 # --- 2. ATN Generator (User Provided Code) ---
 """
   lmatrix(
-    spp_list::Vector{T},
+    spp_list::Vector{<:Any},
     bodymass::Vector{Float64},
     is_producer::Vector{Bool};
     Ropt::Float64,
@@ -51,7 +51,7 @@ Applies external checks for basal percentage and connectance in the wrapper.
 
 """
 function lmatrix(
-    spp_list::Vector{T},
+    spp_list::Vector{<:Any},
     bodymass::Vector{Float64}, # Expects absolute body masses
     is_producer::Vector{Bool};
     Ropt::Float64 = 100.0,
