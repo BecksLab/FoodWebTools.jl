@@ -3,34 +3,57 @@
 # =============================================================================
 
 """
-    _get_downsample_metrics(mat)
+    _active_species(matrix)
 
-Calculate active species count and network connectance.
+Return the number of active species in a binary interaction network.
 
-Returns:
+A species is considered *active* if it participates in at least one realised
+interaction, either as a consumer (row) or as a resource (column).
 
-    (active_species, connectance)
+This definition treats species with at least one incoming *or* outgoing
+interaction as present in the realised food web.
 
-where connectance is:
+# Returns
+
+An integer giving the number of active species.
+"""
+function _active_species(
+    matrix::AbstractMatrix{Bool},
+)
+
+    consumers = vec(sum(matrix, dims=2) .> 0)
+    resources = vec(sum(matrix, dims=1) .> 0)
+
+    return sum(consumers .|| resources)
+
+end
+
+
+"""
+    _connectance(matrix)
+
+Calculate the connectance of a binary interaction network.
+
+Connectance is defined as
 
     L / S²
 
-with `L` the number of realised interactions.
+where
+
+- `L` is the number of realised interactions, and
+- `S` is the number of species.
+
+# Returns
+
+A value between 0 and 1.
 """
-function _get_downsample_metrics(
-    mat::AbstractMatrix{Bool},
+function _connectance(
+    matrix::AbstractMatrix{Bool},
 )
 
-    S = size(mat, 1)
+    S = size(matrix, 1)
 
-    pred_has_links = vec(sum(mat, dims=2) .> 0)
-    prey_has_links = vec(sum(mat, dims=1) .> 0)
-
-    active = sum(pred_has_links .|| prey_has_links)
-
-    connectance = sum(mat) / (S^2)
-
-    return active, connectance
+    return sum(matrix) / (S^2)
 
 end
 
@@ -38,11 +61,17 @@ end
 """
     _rand_categorical(weights)
 
-Sample an index from a probability vector.
+Sample an index from a probability vector using inverse-CDF sampling.
 
-The input should already be normalised to sum to one.
+The supplied weights should already be normalised so that they sum to one.
+
+# Returns
+
+The index of the sampled element.
 """
-function _rand_categorical(weights::AbstractVector{<:Real})
+function _rand_categorical(
+    weights::AbstractVector{<:Real},
+)
 
     r = rand()
 
@@ -62,10 +91,17 @@ function _rand_categorical(weights::AbstractVector{<:Real})
 
 end
 
+
 """
     _normalise_probability_matrix!(P)
 
-Scale a probability matrix to the interval [0,1].
+Normalise a matrix of probabilities to the interval `[0,1]`.
+
+The matrix is scaled by its maximum finite value before being clamped to the
+valid probability range. If all entries are zero (or non-finite), the matrix
+is filled with zeros.
+
+The operation is performed in-place.
 """
 function _normalise_probability_matrix!(P)
 
@@ -83,13 +119,17 @@ function _normalise_probability_matrix!(P)
 
 end
 
+
 """
     _sample_links(matrix, probabilities)
 
-Perform probabilistic link retention using supplied probabilities.
+Perform a single probabilistic downsampling step.
 
-The original matrix is used as a mask so that downsampling can only remove
-existing interactions and never create new ones.
+Each realised interaction is retained independently according to its
+corresponding probability in `probabilities`.
+
+The original interaction matrix is used as a mask so that downsampling can
+remove existing links but can never create new interactions.
 """
 function _sample_links(
     matrix::AbstractMatrix{Bool},
@@ -102,9 +142,120 @@ function _sample_links(
 
 end
 
+
 """
     _existing_links(matrix)
 
-Return the CartesianIndices corresponding to existing interactions.
+Return the locations of all realised interactions.
+
+# Returns
+
+A vector of `CartesianIndex{2}` objects corresponding to entries equal to
+`true` in the interaction matrix.
 """
 _existing_links(matrix::AbstractMatrix{Bool}) = findall(matrix)
+
+
+# =============================================================================
+# Iterative downsampling helpers
+# =============================================================================
+
+"""
+    _valid_removal(matrix, link; allow_species_loss, min_species)
+
+Determine whether removing a candidate interaction satisfies the ecological
+constraints imposed by the iterative downsampling algorithm.
+
+The candidate removal is accepted if
+
+1. the resulting network retains at least `min_species` active species, and
+2. if `allow_species_loss == false`, no species becomes disconnected as a
+   direct consequence of the removal.
+
+Returns `true` if the removal is valid and `false` otherwise.
+"""
+function _valid_removal(
+    matrix::AbstractMatrix{Bool},
+    link::CartesianIndex;
+    allow_species_loss::Bool,
+    min_species::Int,
+)
+
+    temp = copy(matrix)
+    temp[link] = false
+
+    active = _active_species(temp)
+
+    active < min_species && return false
+
+    if !allow_species_loss
+
+        before = _active_species(matrix)
+
+        if active < before
+            return false
+        end
+
+    end
+
+    return true
+
+end
+
+
+"""
+    _choose_removal(matrix, links, weights; kwargs...)
+
+Sample a valid interaction for removal.
+
+Candidate links are sampled according to the supplied removal weights. If a
+sampled link violates the ecological constraints enforced by
+`_valid_removal`, it is discarded and another candidate is sampled from the
+remaining links.
+
+This continues until either
+
+- a valid link is found, or
+- no valid candidates remain.
+
+# Returns
+
+A `CartesianIndex` identifying the chosen interaction, or `nothing` if no
+valid removal exists.
+"""
+function _choose_removal(
+    matrix::AbstractMatrix{Bool},
+    links,
+    weights;
+    allow_species_loss::Bool,
+    min_species::Int,
+)
+
+    candidates = collect(links)
+    probs = Float64.(weights)
+
+    while !isempty(candidates)
+
+        probs ./= sum(probs)
+
+        chosen = _rand_categorical(probs)
+
+        link = candidates[chosen]
+
+        if _valid_removal(
+            matrix,
+            link;
+            allow_species_loss,
+            min_species,
+        )
+            return link
+        end
+
+        deleteat!(candidates, chosen)
+        deleteat!(probs, chosen)
+
+    end
+
+    return nothing
+
+end
