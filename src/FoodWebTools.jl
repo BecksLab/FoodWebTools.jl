@@ -13,6 +13,7 @@ include(joinpath("generators", "ltm.jl"))
 # Network metrics
 include(joinpath("metrics", "intervality.jl"))
 include(joinpath("metrics", "trophic_level.jl"))
+include(joinpath("metrics", "trophic_coherence.jl"))
 
 # Downsampling
 include(joinpath("downsampling", "Downsampling.jl")) # note calls exports already
@@ -28,6 +29,7 @@ export ltm
 # Network metrics
 export intervality
 export trophic_level
+export trophic_coherence
 
 using .Downsampling
 
