@@ -1,33 +1,44 @@
 """
-trophic_level(A::AbstractMatrix{Bool};
-              species=nothing)
+    trophic_level(A::AbstractMatrix{Bool}; species=nothing)
 
-    Calculates the trophic level of all species in a network using the average 
-    shortest path from the prey of species 𝑖 to a basal species
+Calculate species trophic levels using the Williams & Martinez (2004)
+shortest-path/diet matrix formulation.
 
-    Williams, Richard J., and Neo D. Martinez. 2004. “Limits to Trophic Levels 
-    and Omnivory in Complex Food Webs: Theory and Data.” The American Naturalist 
-    163 (3): 458–68. https://doi.org/10.1086/381964.
+The adjacency matrix convention is:
+
+`A[i,j] == true` means species `i` consumes species `j`.
+
+Basal species (species without prey) receive trophic level 1.
+
+If `species` is provided, returns a dictionary mapping species identifiers
+to trophic levels.
 """
 function trophic_level(
     A::AbstractMatrix{Bool};
     species=nothing
 )
-    # Species richness
-    S = size(A, 1)
-    in_degree = sum(A; dims = 2)
-    # Diet matrix
-    D = -(A ./ in_degree)
-    D[isnan.(D)] .= 0.0
-    D[diagind(D)] .= 1.0 .- D[diagind(D)]
-    # Solve with the inverse matrix.
-    inverse = iszero(det(D)) ? pinv : inv
-    tls = inverse(D) * ones(S)
-    tls = vec(inverse(D) * ones(S))
+
+    S = size(A,1)
+
+    diet = sum(A; dims=2)
+
+    D = zeros(Float64, S, S)
+
+    for i in 1:S
+        prey = findall(A[i,:])
+
+        if !isempty(prey)
+            D[i,prey] .= -1 / length(prey)
+        end
+    end
+
+    D[diagind(D)] .+= 1
+
+    tls = D \ ones(S)
 
     if isnothing(species)
         return tls
     end
 
-    return Dict(zip(species, tls))
+    return Dict(zip(species,tls))
 end
