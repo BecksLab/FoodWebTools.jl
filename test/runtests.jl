@@ -11,8 +11,8 @@ using FoodWebTools
         include("units/01_intervality.jl")
     end
 
-    @testset "Trophic level" begin
-        include("units/02_trophic_level.jl")
+    @testset "Trophic metrics" begin
+        include("units/02_trophic_metrics.jl")
     end
 
     @testset "Downsampling" begin
