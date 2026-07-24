@@ -1,7 +1,7 @@
 using Test
 using FoodWebTools
 
-@testset "Extinctions" begin
+@testset "FoodWeb tools" begin
 
      @testset "All Good" begin
         include("units/00_allgood.jl")
@@ -13,6 +13,10 @@ using FoodWebTools
 
     @testset "Trophic level" begin
         include("units/02_trophic_level.jl")
+    end
+
+    @testset "Downsampling" begin
+        include("units/03_downsampling.jl")
     end
 
 end

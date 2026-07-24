@@ -14,6 +14,9 @@ include(joinpath("generators", "ltm.jl"))
 include(joinpath("metrics", "intervality.jl"))
 include(joinpath("metrics", "trophic_level.jl"))
 
+# Downsampling
+include(joinpath("downsampling", "Downsampling.jl")) # note calls exports already
+
 # Public API
 export adbm, adbm_parameters
 export lmatrix
@@ -22,7 +25,17 @@ export random_model
 export cascade_model
 export ltm
 
+# Network metrics
 export intervality
 export trophic_level
+
+using .Downsampling
+
+export downsample
+export AbstractDownsamplingMethod
+export PowerLaw
+export Niche
+export DegreeProduct
+export RandomSampling
 
 end
