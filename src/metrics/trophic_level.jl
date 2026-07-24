@@ -15,7 +15,6 @@ Basal species (species without prey) receive trophic level 1.
 If `species` is provided, returns a dictionary mapping species identifiers
 to trophic levels.
 """
-
 function trophic_level(
     A::AbstractMatrix{Bool};
     species=nothing
