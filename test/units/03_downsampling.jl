@@ -1,5 +1,11 @@
 using FoodWebTools
 using Test
+using Random
+using Statistics
+
+# -------------------------------------------------------------------------
+# Helper functions
+# -------------------------------------------------------------------------
 
 const TEST_WEB = Bool[
     0 1 1 0 0
@@ -9,240 +15,235 @@ const TEST_WEB = Bool[
     1 0 0 0 0
 ]
 
+active_species(mat) =
+    sum(
+        vec(sum(mat, dims=2) .> 0) .||
+        vec(sum(mat, dims=1) .> 0)
+    )
+
+connectance(mat) = sum(mat) / length(mat)
+
+# -------------------------------------------------------------------------
+# Generic API
+# -------------------------------------------------------------------------
 
 @testset "Downsampling API" begin
 
-    matrix = TEST_WEB
-
-
-    @testset "Single-step methods return matrices" begin
-
-        results = [
-            downsample(matrix, :random),
-            downsample(matrix, :degree),
-            downsample(matrix, :powerlaw; y=2.0),
-            downsample(matrix, :niche; sigma_scale=1.0),
-        ]
-
-        for i in eachindex(results)
-
-            @test results[i] isa AbstractMatrix{Bool}
-            @test size(results[i]) == size(matrix)
-
-        end
-
-    end
-
-
-    @testset "No new links are created" begin
-
-        for result in [
-            downsample(matrix, :random),
-            downsample(matrix, :degree),
-            downsample(matrix, :powerlaw; y=2.0),
-            downsample(matrix, :niche; sigma_scale=1.0),
-        ]
-
-            @test all(result .<= matrix)
-
-        end
-
-    end
-
-
-end
-
-@testset "Target connectance downsampling" begin
-
-    target = 0.10
-
-    for method in [
+    for method in (
         :random,
         :degree,
         :powerlaw,
         :niche,
-    ]
+    )
 
         result =
-            if method == :powerlaw
-                downsample(TEST_WEB, method;
-                    y=2.0,
-                    target_co=target
-                )
-
-            elseif method == :niche
-                downsample(TEST_WEB, method;
-                    sigma_scale=1.0,
-                    target_co=target
-                )
-
-            else
-                downsample(TEST_WEB, method;
-                    target_co=target
-                )
-            end
-
+            method == :powerlaw ? downsample(TEST_WEB, method; y=2.0) :
+            method == :niche    ? downsample(TEST_WEB, method; sigma_scale=1.0) :
+                                  downsample(TEST_WEB, method)
 
         @test size(result) == size(TEST_WEB)
-
-        # Should never exceed original links
+        @test result isa AbstractMatrix{Bool}
         @test all(result .<= TEST_WEB)
 
-
-        # Connectance should have decreased
-        original_links = sum(TEST_WEB)
-        new_links = sum(result)
-
-        @test new_links <= original_links
-
     end
 
 end
 
-@testset "Species retention constraint" begin
-
-    result = downsample(
-        TEST_WEB,
-        :degree;
-        target_co=0.05,
-        min_spp_prop=0.8
-    )
-
-
-    active_species =
-        sum(
-            vec(sum(result, dims=1) .> 0) .||
-            vec(sum(result, dims=2) .> 0)
-        )
-
-
-    @test active_species >= ceil(Int, 5*0.8)
-
-end
-
-using Random
-
-@testset "Random reproducibility" begin
-
-    Random.seed!(66)
-
-    a = downsample(TEST_WEB, :random)
-
-    Random.seed!(66)
-
-    b = downsample(TEST_WEB, :random)
-
-    @test a == b
-
-end
-
-function active_species(mat)
-
-    rows = vec(sum(mat, dims=2) .> 0)
-    cols = vec(sum(mat, dims=1) .> 0)
-
-    sum(rows .|| cols)
-
-end
-
-@testset "Species conservation" begin
-
-    result = downsample(
-        TEST_WEB,
-        :degree;
-        target_co=0.15,
-        min_spp_prop=0.8
-    )
-
-
-    @test active_species(result) >= ceil(0.8*5)
-
-end
-
-function connectance(mat)
-    sum(mat) / length(mat)
-end
-
-
-@testset "Connectance decreases" begin
-
-    original = connectance(TEST_WEB)
-
-    for method in [
-        PowerLaw(2.0),
-        Niche(1.0),
-        DegreeProduct(),
-        RandomSampling()
-    ]
-
-        result = downsample(TEST_WEB, method)
-
-        @test connectance(result) <= original
-
-    end
-
-end
+# -------------------------------------------------------------------------
+# Target connectance
+# -------------------------------------------------------------------------
 
 @testset "Target connectance" begin
 
     target = 0.15
 
+    for method in (
+        :random,
+        :degree,
+        :powerlaw,
+        :niche,
+    )
 
-    for method in [
-        DegreeProduct(),
-        RandomSampling(),
-        PowerLaw(2.0),
-        Niche(1.0)
+        result =
+            method == :powerlaw ? downsample(TEST_WEB, method; y=2.0, target_co=target) :
+            method == :niche    ? downsample(TEST_WEB, method; sigma_scale=1.0, target_co=target) :
+                                  downsample(TEST_WEB, method; target_co=target)
+
+        @test connectance(result) <= connectance(TEST_WEB)
+        @test all(result .<= TEST_WEB)
+
+    end
+
+end
+
+# -------------------------------------------------------------------------
+# Species retention
+# -------------------------------------------------------------------------
+
+@testset "Minimum species proportion respected" begin
+
+    result = downsample(
+        TEST_WEB,
+        :degree;
+        target_co=0.05,
+        min_spp_prop=0.8,
+    )
+
+    @test active_species(result) >= 4
+
+end
+
+# -------------------------------------------------------------------------
+# New guard rail
+# -------------------------------------------------------------------------
+
+@testset "Species loss protection" begin
+
+    WEB = Bool[
+        1 0 0
+        0 1 0
+        0 0 1
     ]
 
-        result = downsample(
-            TEST_WEB,
-            method;
-            target_co=target
-        )
+    protected = downsample(
+        WEB,
+        :degree;
+        target_co=0.0,
+        allow_species_loss=false,
+    )
 
+    unprotected = downsample(
+        WEB,
+        :degree;
+        target_co=0.0,
+        allow_species_loss=true,
+    )
 
-        co = connectance(result)
+    @test protected == WEB
+    @test sum(unprotected) <= sum(WEB)
 
-        @test co <= connectance(TEST_WEB)
+end
+
+# -------------------------------------------------------------------------
+# Random reproducibility
+# -------------------------------------------------------------------------
+
+@testset "Random seed reproducibility" begin
+
+    for method in (
+        :random,
+        :degree,
+        :powerlaw,
+        :niche,
+    )
+
+        Random.seed!(66)
+
+        a =
+            method == :powerlaw ? downsample(TEST_WEB, method; y=2.0) :
+            method == :niche    ? downsample(TEST_WEB, method; sigma_scale=1.0) :
+                                  downsample(TEST_WEB, method)
+
+        Random.seed!(66)
+
+        b =
+            method == :powerlaw ? downsample(TEST_WEB, method; y=2.0) :
+            method == :niche    ? downsample(TEST_WEB, method; sigma_scale=1.0) :
+                                  downsample(TEST_WEB, method)
+
+        @test a == b
 
     end
 
 end
 
-# Now we test the ecology
+# -------------------------------------------------------------------------
+# Empty network
+# -------------------------------------------------------------------------
 
-GENERALIST_WEB = Bool[
-    1 1 1 1 0
-    0 1 0 0 0
-    0 0 1 0 0
-    0 0 0 1 0
-    0 0 0 0 0
-]
+@testset "Empty networks remain empty" begin
 
-@testset "Degree product targets generalists" begin
+    WEB = falses(5,5)
 
-    removals = 0
+    for method in (
+        :random,
+        :degree,
+        :powerlaw,
+        :niche,
+    )
 
-    for i in 1:500
+        result =
+            method == :powerlaw ? downsample(WEB, method; y=2.0) :
+            method == :niche    ? downsample(WEB, method; sigma_scale=1.0) :
+                                  downsample(WEB, method)
 
-        result = downsample(
-            GENERALIST_WEB,
-            DegreeProduct()
-        )
-
-        if result[1, 1] == false
-            removals += 1
-        end
+        @test result == WEB
 
     end
 
+end
 
-    @test removals > 0
+# -------------------------------------------------------------------------
+# Complete network
+# -------------------------------------------------------------------------
+
+@testset "Complete networks only lose links" begin
+
+    WEB = trues(5,5)
+
+    for method in (
+        :random,
+        :degree,
+        :powerlaw,
+        :niche,
+    )
+
+        result =
+            method == :powerlaw ? downsample(WEB, method; y=2.0) :
+            method == :niche    ? downsample(WEB, method; sigma_scale=1.0) :
+                                  downsample(WEB, method)
+
+        @test all(result .<= WEB)
+
+    end
 
 end
 
-@testset "Power law assigns higher retention to generalists" begin
+# -------------------------------------------------------------------------
+# Ecology: degree product
+# -------------------------------------------------------------------------
+
+@testset "Degree product preferentially removes hub interactions" begin
+
+    WEB = Bool[
+        1 1 1 1 1
+        1 0 0 0 0
+        1 0 0 0 0
+        1 0 0 0 0
+        1 0 0 0 0
+    ]
+
+    hub_losses = 0
+    peripheral_losses = 0
+
+    for i in 1:1000
+
+        result = downsample(WEB, :degree)
+
+        hub_losses += !result[1,1]
+        peripheral_losses += !result[2,1]
+
+    end
+
+    @test hub_losses > peripheral_losses
+
+end
+
+# -------------------------------------------------------------------------
+# Ecology: power law
+# -------------------------------------------------------------------------
+
+@testset "Power law retains generalists" begin
 
     WEB = Bool[
         1 1 1 1 1
@@ -252,53 +253,38 @@ end
         0 0 0 0 1
     ]
 
-    probs = FoodWebTools.Downsampling._retention_probabilities(
-        WEB,
-        PowerLaw(2.0)
-    )
+    generalist = Float64[]
+    specialist = Float64[]
 
-    @test probs[1] > probs[2]
-    @test probs[1] > probs[3]
-    @test probs[1] > probs[4]
-    @test probs[1] > probs[5]
+    for i in 1:500
 
-end
+        result = downsample(WEB, :powerlaw; y=2.0)
 
-@testset "Degree product removes highly connected interactions" begin
+        push!(generalist, sum(result[1,:]))
 
-    DEGREE_WEB = Bool[
-        1 1 1 1 1
-        1 0 0 0 0
-        1 0 0 0 0
-        1 0 0 0 0
-        1 0 0 0 0
-    ]
-
-    Random.seed!(66)
-
-    high_degree_losses = 0
-    low_degree_losses = 0
-
-
-    for i in 1:1000
-
-        result = downsample(
-            DEGREE_WEB,
-            DegreeProduct()
+        push!(
+            specialist,
+            mean(sum.(eachrow(result)[2:5]))
         )
-
-
-        if !result[1, 1]
-            high_degree_losses += 1
-        end
-
-        if !result[2, 1]
-            low_degree_losses += 1
-        end
 
     end
 
+    @test mean(generalist) > mean(specialist)
 
-    @test high_degree_losses > low_degree_losses
+end
+
+# -------------------------------------------------------------------------
+# Already below target
+# -------------------------------------------------------------------------
+
+@testset "Already below target connectance" begin
+
+    result = downsample(
+        TEST_WEB,
+        :degree;
+        target_co=1.0,
+    )
+
+    @test result == TEST_WEB
 
 end
