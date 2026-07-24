@@ -96,7 +96,9 @@ function _sample_links(
     probabilities::AbstractMatrix{<:Real},
 )
 
-    return matrix .& (rand(size(matrix)) .<= probabilities)
+    draws = rand(Float64, size(matrix))
+
+    return matrix .& (draws .<= probabilities)
 
 end
 
