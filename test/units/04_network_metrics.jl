@@ -4,7 +4,7 @@ using LinearAlgebra
 using Statistics
 
 
-@testset "Clustering" begin
+@testset "Clustering Tests" begin
 
 
     @testset "Complete triangle" begin
@@ -300,6 +300,112 @@ end
         A = trues(5, 5)
         @test intervality(A) == 0
 
+    end
+
+end
+
+# downsampling
+
+@testset "Diameter Tests" begin
+
+    @testset "Empty graph" begin
+        A = falses(1,1)
+        @test diameter(A) == 0
+    end
+
+    @testset "Single edge" begin
+        # 1 → 2
+        A = Bool[
+            0 1
+            0 0
+        ]
+        @test diameter(A) == 1
+    end
+
+    @testset "Directed chain" begin
+        # 1 → 2 → 3 → 4
+        A = Bool[
+            0 1 0 0
+            0 0 1 0
+            0 0 0 1
+            0 0 0 0
+        ]
+        @test diameter(A) == 3
+    end
+
+    @testset "Directed cycle" begin
+        # 1 → 2 → 3 → 1
+        A = Bool[
+            0 1 0
+            0 0 1
+            1 0 0
+        ]
+        @test diameter(A) == 2
+    end
+
+    @testset "Disconnected graph" begin
+        # 1 → 2     3 → 4
+        A = Bool[
+            0 1 0 0
+            0 0 0 0
+            0 0 0 1
+            0 0 0 0
+        ]
+        @test diameter(A) == 1
+    end
+
+    @testset "Completely disconnected" begin
+        A = falses(5,5)
+        @test diameter(A) == 0
+    end
+
+    @testset "Complete digraph" begin
+        n = 5
+        A = trues(n,n)
+        A[diagind(A)] .= false
+
+        @test diameter(A) == 1
+    end
+
+    @testset "Star graph" begin
+        #      1
+        #    / | \
+        #   2  3  4
+        A = Bool[
+            0 1 1 1
+            0 0 0 0
+            0 0 0 0
+            0 0 0 0
+        ]
+
+        @test diameter(A) == 1
+    end
+
+    @testset "Branching graph" begin
+        #
+        # 1 → 2 → 4
+        #  \
+        #   → 3 → 5
+        #
+        A = Bool[
+            0 1 1 0 0
+            0 0 0 1 0
+            0 0 0 0 1
+            0 0 0 0 0
+            0 0 0 0 0
+        ]
+
+        @test diameter(A) == 2
+    end
+
+    @testset "Self loops ignored" begin
+        A = Bool[
+            1 1 0
+            0 1 1
+            0 0 1
+        ]
+
+        @test diameter(A) == 2
     end
 
 end

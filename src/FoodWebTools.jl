@@ -15,6 +15,7 @@ include(joinpath("metrics", "intervality.jl"))
 include(joinpath("metrics", "trophic_level.jl"))
 include(joinpath("metrics", "trophic_coherence.jl"))
 include(joinpath("metrics", "clustering.jl"))
+include(joinpath("metrics", "diameter.jl"))
 
 # Downsampling
 include(joinpath("downsampling", "Downsampling.jl")) # note calls exports already
@@ -32,6 +33,7 @@ export intervality
 export trophic_level
 export trophic_coherence
 export clustering
+export diameter
 
 using .Downsampling
 
