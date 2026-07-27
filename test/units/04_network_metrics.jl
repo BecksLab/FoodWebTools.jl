@@ -2,6 +2,8 @@ using FoodWebTools
 using Test
 using LinearAlgebra
 using Statistics
+using Random
+using Graphs: SimpleDiGraph, floyd_warshall_shortest_paths
 
 
 @testset "Clustering Tests" begin
@@ -309,7 +311,7 @@ end
 @testset "Diameter Tests" begin
 
     @testset "Empty graph" begin
-        A = falses(1,1)
+        A = falses(1, 1)
         @test diameter(A) == 0
     end
 
@@ -355,13 +357,13 @@ end
     end
 
     @testset "Completely disconnected" begin
-        A = falses(5,5)
+        A = falses(5, 5)
         @test diameter(A) == 0
     end
 
     @testset "Complete digraph" begin
         n = 5
-        A = trues(n,n)
+        A = trues(n, n)
         A[diagind(A)] .= false
 
         @test diameter(A) == 1
@@ -406,6 +408,34 @@ end
         ]
 
         @test diameter(A) == 2
+    end
+
+    @testset "Compare with Graphs.jl" begin
+        Random.seed!(42)
+
+        for n in 2:12
+            for _ in 1:10
+
+                A = rand(Bool, n, n)
+                A[diagind(A)] .= false
+
+                # Your implementation
+                d1 = diameter(A)
+
+                # Graphs.jl reference
+                g = SimpleDiGraph(A)
+                dists = floyd_warshall_shortest_paths(g).dists
+
+                d2 = 0
+                for d in dists
+                    if d != typemax(Int)
+                        d2 = max(d2, d)
+                    end
+                end
+
+                @test d1 == d2
+            end
+        end
     end
 
 end
