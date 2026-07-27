@@ -437,5 +437,155 @@ end
             end
         end
     end
+end
+
+@testset "Chain Metrics Tests" begin
+
+    @testset "Empty graph" begin
+        A = falses(3, 3)
+
+        m = chain_metrics(A)
+
+        @test isnan(m.ChLen)
+        @test isnan(m.ChSD)
+        @test m.ChNum == 0.0
+    end
+
+    @testset "Single chain" begin
+        #
+        # 1 → 2 → 3
+        #
+        A = Bool[
+            0 1 0
+            0 0 1
+            0 0 0
+        ]
+
+        m = chain_metrics(A)
+
+        @test m.ChLen == 2
+        @test m.ChSD == 0
+        @test m.ChNum == 0
+    end
+
+    @testset "Two independent chains" begin
+        #
+        # 1 → 2
+        #
+        # 3 → 4
+        #
+        A = Bool[
+            0 1 0 0
+            0 0 0 0
+            0 0 0 1
+            0 0 0 0
+        ]
+
+        m = chain_metrics(A)
+
+        @test m.ChLen == 1
+        @test m.ChSD == 0
+        @test m.ChNum == log(2)
+    end
+
+    @testset "Branching food web" begin
+        #
+        #      1
+        #     / \
+        #    2   3
+        #     \ /
+        #      4
+        #
+        A = Bool[
+            0 1 1 0
+            0 0 0 1
+            0 0 0 1
+            0 0 0 0
+        ]
+
+        m = chain_metrics(A)
+
+        @test m.ChLen == 2
+        @test m.ChSD == 0
+        @test m.ChNum == log(2)
+    end
+
+    @testset "Disconnected species ignored" begin
+        #
+        # 1 → 2
+        #
+        # 3 (isolated)
+        #
+        A = Bool[
+            0 1 0
+            0 0 0
+            0 0 0
+        ]
+
+        m = chain_metrics(A)
+
+        @test m.ChLen == 1
+        @test m.ChSD == 0
+        @test m.ChNum == 0
+    end
+
+    @testset "Simple cycle" begin
+        #
+        # 1 → 2 → 3
+        # ↑       ↓
+        # └───────┘
+        #
+        A = Bool[
+            0 1 0
+            0 0 1
+            1 0 0
+        ]
+
+        m = chain_metrics(A)
+
+        @test isnan(m.ChLen)
+        @test isnan(m.ChSD)
+        @test m.ChNum == 0.0
+    end
+
+    @testset "Cycle with basal and top species" begin
+        #
+        # 1 → 2 → 3 ↘
+        #     ↑   ↓   |
+        #     └───┘   |
+        #             4
+        #
+        A = Bool[
+            0 1 0 0
+            0 0 1 0
+            0 1 0 1
+            0 0 0 0
+        ]
+
+        m = chain_metrics(A)
+
+        @test m.ChLen == 3
+        @test m.ChSD == 0
+        @test m.ChNum == 0
+    end
+
+    @testset "Maximum depth truncates search" begin
+        #
+        # 1 → 2 → 3 → 4 → 5
+        #
+        A = Bool[
+            0 1 0 0 0
+            0 0 1 0 0
+            0 0 0 1 0
+            0 0 0 0 1
+            0 0 0 0 0
+        ]
+
+        m = chain_metrics(A; max_depth=2)
+
+        @test isnan(m.ChLen)
+        @test isnan(m.ChSD)
+        @test m.ChNum == 0.0
+    end
 
 end
