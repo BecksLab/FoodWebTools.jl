@@ -17,6 +17,7 @@ include(joinpath("metrics", "trophic_coherence.jl"))
 include(joinpath("metrics", "clustering.jl"))
 include(joinpath("metrics", "diameter.jl"))
 include(joinpath("metrics", "chain_metrics.jl"))
+include(joinpath("metrics", "max_sim.jl"))
 
 # Downsampling
 include(joinpath("downsampling", "Downsampling.jl")) # note calls exports already
@@ -36,6 +37,7 @@ export trophic_coherence
 export clustering
 export diameter
 export chain_metrics
+export max_sim
 
 using .Downsampling
 

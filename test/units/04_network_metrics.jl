@@ -589,3 +589,120 @@ end
     end
 
 end
+
+@testset "Maximum Similarity Tests" begin
+
+    @testset "Single species" begin
+        #
+        # 1
+        #
+        A = falses(1, 1)
+
+        @test max_sim(A) == 0.0
+    end
+
+    @testset "Two isolated species" begin
+        #
+        # 1   2
+        #
+        A = falses(2, 2)
+
+        @test max_sim(A) == 0.0
+    end
+
+    @testset "Simple food chain" begin
+        #
+        # 1 → 2 → 3
+        #
+        A = Bool[
+            0 1 0
+            0 0 1
+            0 0 0
+        ]
+
+        # Species 1 and 3 share neither predators nor prey.
+        # Species 2 shares nothing with either.
+        @test max_sim(A) == 0.0
+    end
+
+    @testset "Shared prey" begin
+        #
+        #   1
+        #  ↙ ↘
+        # 2   3
+        #
+        A = Bool[
+            0 1 1
+            0 0 0
+            0 0 0
+        ]
+
+        # Species 2 and 3 have identical prey sets.
+        @test max_sim(A) ≈ 2/3
+    end
+
+    @testset "Shared predator" begin
+        #
+        # 1   2
+        #  \ /
+        #   3
+        #
+        A = Bool[
+            0 0 1
+            0 0 1
+            0 0 0
+        ]
+
+        # Species 1 and 2 have identical predator sets.
+        @test max_sim(A) ≈ 2/3
+    end
+
+    @testset "Identical trophic niches" begin
+        #
+        #      1
+        #     / \
+        #    2   3
+        #     \ /
+        #      4
+        #
+        A = Bool[
+            0 1 1 0
+            0 0 0 1
+            0 0 0 1
+            0 0 0 0
+        ]
+
+        # Species 2 and 3 have identical prey and predators.
+        @test max_sim(A) ≈ 0.5 atol=1e-12
+    end
+
+    @testset "Self loops ignored" begin
+        #
+        # 1 ↺
+        # |
+        # v
+        # 2
+        #
+        A = Bool[
+            1 1
+            0 0
+        ]
+
+        # Self-loops should not increase trophic similarity.
+        @test max_sim(A) == 0.0
+    end
+
+    @testset "Symmetric network" begin
+        #
+        # 1 ↔ 2
+        #
+        A = Bool[
+            0 1
+            1 0
+        ]
+
+        # Each species has identical predator/prey sets.
+        @test max_sim(A) == 0.0
+    end
+
+end
