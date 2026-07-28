@@ -1,7 +1,7 @@
 using LinearAlgebra
 
 """
-    trophic_level(A::AbstractMatrix{Bool}; species=nothing)
+    trophic_level(A::AbstractMatrix{Bool}; species=nothing, exclude_cannibalism=true)
 
 Calculate species trophic levels using the Williams & Martinez (2004)
 shortest-path/diet matrix formulation.
@@ -12,13 +12,28 @@ The adjacency matrix convention is:
 
 Basal species (species without prey) receive trophic level 1.
 
+If `exclude_cannibalism=true`, self-consumption links (`A[i,i] == true`)
+are removed before calculating trophic levels. This is done by setting the
+diagonal of a copy of the adjacency matrix to `false`, leaving the original
+input matrix unchanged.
+
+Species that only have cannibalistic links will therefore be treated as
+having no prey and will receive a trophic level of 1.
+
 If `species` is provided, returns a dictionary mapping species identifiers
 to trophic levels.
 """
 function trophic_level(
     A::AbstractMatrix{Bool};
-    species=nothing
+    species=nothing,
+    exclude_cannibalism=true
 )
+
+    A = copy(A)
+
+    if exclude_cannibalism
+        A[diagind(A)] .= false
+    end
 
     S = size(A,1)
 
@@ -46,9 +61,5 @@ function trophic_level(
         end
     end
 
-    if isnothing(species)
-        return tls
-    end
-
-    return Dict(zip(species,tls))
+    isnothing(species) ? tls : Dict(zip(species,tls))
 end
