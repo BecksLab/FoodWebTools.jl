@@ -19,4 +19,8 @@ using FoodWebTools
         include("units/04_network_metrics.jl")
     end
 
+    @testset "Body size simulations" begin
+        include("units/05_bodysize.jl")
+    end
+
 end

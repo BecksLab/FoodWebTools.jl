@@ -22,7 +22,12 @@ include(joinpath("metrics", "max_sim.jl"))
 # Downsampling
 include(joinpath("downsampling", "Downsampling.jl")) # note calls exports already
 
+# Body size simulations
+include(joinpath("bodysizes", "nested.jl"))
+
 # Public API
+
+# Network generators
 export adbm, adbm_parameters
 export lmatrix
 export niche_model
@@ -39,6 +44,7 @@ export diameter
 export chain_metrics
 export max_sim
 
+# Downsampling
 using .Downsampling
 
 export downsample
@@ -47,5 +53,9 @@ export PowerLaw
 export Niche
 export DegreeProduct
 export RandomSampling
+
+# Body size simulations
+export nested_bodymasses
+
 
 end
