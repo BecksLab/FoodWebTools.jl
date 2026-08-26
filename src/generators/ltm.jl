@@ -115,7 +115,7 @@ function ltm(
     ensure_viability::Bool = false,  # Skip internal viability check
     remove_flawed::Bool = false
 )
-    # --- Initialization ---
+    # --- Initialisation ---
     S = length(species_indices)
     local f_traits, v_traits # Define in local scope for conditional assignment
 
